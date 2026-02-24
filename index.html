@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RW Financial Analyst v2.1</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;height:100vh;display:flex;flex-direction:column}
+  header{background:#1a1f2e;border-bottom:1px solid #2d3448;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+  header h1{font-size:16px;font-weight:700;color:#7eb8f7;letter-spacing:.5px}
+  header span{font-size:11px;color:#64748b;background:#0f1117;padding:2px 8px;border-radius:10px;border:1px solid #2d3448}
+
+  .api-bar{background:#1a1f2e;border-bottom:1px solid #2d3448;padding:8px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .api-bar label{font-size:12px;color:#94a3b8;white-space:nowrap}
+  .api-status{font-size:11px;padding:2px 8px;border-radius:10px;white-space:nowrap}
+  .api-status.ok{background:#14532d;color:#86efac}
+  .api-status.missing{background:#450a0a;color:#fca5a5}
+
+  main{flex:1;display:flex;overflow:hidden}
+  .left{width:380px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid #2d3448;background:#13182a}
+  .panel-header{padding:10px 16px;font-size:12px;font-weight:600;color:#94a3b8;border-bottom:1px solid #2d3448;background:#1a1f2e;text-transform:uppercase;letter-spacing:.8px}
+  .upload-zone{margin:12px;border:2px dashed #2d3448;border-radius:10px;padding:20px 16px;text-align:center;cursor:pointer;transition:all .2s;background:#0f1117}
+  .upload-zone:hover,.upload-zone.drag{border-color:#7eb8f7;background:#0d1526}
+  .upload-zone p{font-size:13px;color:#64748b;margin-top:6px}
+  .upload-zone .icon{font-size:28px}
+  .upload-zone input{display:none}
+  .file-list{padding:0 12px;display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto}
+  .file-chip{display:flex;align-items:center;gap:8px;background:#1a1f2e;border:1px solid #2d3448;border-radius:8px;padding:6px 10px;font-size:12px}
+  .file-chip .fname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e2e8f0}
+  .file-chip .ftype{color:#7eb8f7;font-size:10px;background:#0f1117;padding:1px 6px;border-radius:6px;flex-shrink:0}
+  .file-chip .rem{cursor:pointer;color:#64748b;font-size:14px;line-height:1;flex-shrink:0}
+  .file-chip .rem:hover{color:#f87171}
+
+  .manual-toggle{margin:8px 12px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#94a3b8}
+  .manual-toggle input{accent-color:#7eb8f7}
+  .manual-area{margin:8px 12px 0;display:none}
+  .manual-area textarea{width:100%;background:#0f1117;border:1px solid #2d3448;border-radius:8px;padding:10px;color:#e2e8f0;font-size:12px;resize:vertical;min-height:80px}
+  .manual-area textarea:focus{outline:none;border-color:#7eb8f7}
+
+  .chat-area{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .msg{display:flex;flex-direction:column;gap:4px}
+  .msg.user .bubble{background:#1e3a5f;border-radius:10px 10px 4px 10px;align-self:flex-end;max-width:90%}
+  .msg.assistant .bubble{background:#1a1f2e;border-radius:10px 10px 10px 4px;align-self:flex-start;max-width:95%;border:1px solid #2d3448}
+  .bubble{padding:10px 12px;font-size:13px;line-height:1.5}
+  .msg-label{font-size:10px;color:#475569;padding:0 4px}
+  .msg.user .msg-label{text-align:right}
+  .typing{display:flex;gap:4px;padding:10px 12px;background:#1a1f2e;border-radius:10px;border:1px solid #2d3448;align-self:flex-start}
+  .typing span{width:6px;height:6px;background:#7eb8f7;border-radius:50%;animation:bounce .8s infinite}
+  .typing span:nth-child(2){animation-delay:.15s}
+  .typing span:nth-child(3){animation-delay:.3s}
+  @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+
+  .input-row{padding:10px 12px;border-top:1px solid #2d3448;display:flex;gap:8px;background:#1a1f2e}
+  .input-row textarea{flex:1;background:#0f1117;border:1px solid #2d3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;resize:none;max-height:100px;font-family:inherit}
+  .input-row textarea:focus{outline:none;border-color:#7eb8f7}
+  .btn{background:#1e3a5f;border:none;border-radius:8px;padding:8px 14px;color:#7eb8f7;font-size:13px;cursor:pointer;font-weight:600;transition:background .2s;white-space:nowrap}
+  .btn:hover{background:#2a4a7f}
+  .btn:disabled{opacity:.4;cursor:default}
+  .btn-sm{font-size:12px;padding:5px 10px;border-radius:6px}
+  .btn-success{background:#14532d;color:#86efac;border:none}
+  .btn-success:hover{background:#166534}
+  .btn-danger{background:#450a0a;color:#fca5a5;border:none}
+  .btn-danger:hover{background:#7f1d1d}
+
+  .right{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .report-toolbar{padding:8px 16px;background:#1a1f2e;border-bottom:1px solid #2d3448;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .report-toolbar .title{flex:1;font-size:12px;color:#64748b;min-width:120px}
+  .report-content{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column}
+  .report-editor{flex:1;background:transparent;border:none;color:#e2e8f0;font-family:'Courier New',monospace;font-size:13px;line-height:1.6;resize:none;outline:none;min-height:100%}
+  .report-preview{flex:1;font-size:13px;line-height:1.7;color:#e2e8f0}
+  .report-preview h1{font-size:18px;color:#7eb8f7;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid #2d3448}
+  .report-preview h2{font-size:15px;color:#93c5fd;margin:20px 0 8px}
+  .report-preview h3{font-size:13px;color:#bfdbfe;margin:14px 0 6px}
+  .report-preview table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12px}
+  .report-preview th{background:#1a1f2e;color:#94a3b8;padding:6px 10px;text-align:left;border:1px solid #2d3448;font-size:11px}
+  .report-preview td{padding:6px 10px;border:1px solid #2d3448;vertical-align:top}
+  .report-preview tr:nth-child(even) td{background:#0d1120}
+  .report-preview strong{color:#f0f9ff}
+  .report-preview em{color:#cbd5e1}
+  .report-preview code{background:#1a1f2e;padding:1px 5px;border-radius:4px;font-size:12px;color:#7eb8f7}
+  .report-preview ul,.report-preview ol{padding-left:20px;margin:6px 0}
+  .report-preview li{margin:3px 0}
+  .report-preview p{margin:6px 0}
+  .report-preview hr{border:none;border-top:1px solid #2d3448;margin:16px 0}
+  .view-toggle{display:flex;gap:4px}
+  .view-btn{background:#0f1117;border:1px solid #2d3448;border-radius:6px;padding:4px 10px;color:#94a3b8;font-size:12px;cursor:pointer;transition:all .2s}
+  .view-btn.active{background:#1e3a5f;color:#7eb8f7;border-color:#3b5f99}
+  .empty-report{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#475569;gap:10px;text-align:center}
+  .empty-report .big{font-size:40px}
+  .empty-report p{font-size:13px}
+
+  /* Export modal */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100;display:none}
+  .modal-overlay.show{display:flex}
+  .modal{background:#1a1f2e;border:1px solid #2d3448;border-radius:14px;padding:28px 32px;max-width:420px;width:90%;display:flex;flex-direction:column;gap:16px}
+  .modal h2{font-size:16px;color:#7eb8f7}
+  .modal p{font-size:13px;color:#94a3b8;line-height:1.6}
+  .modal .filename{background:#0f1117;border:1px solid #3b5f99;border-radius:8px;padding:10px 14px;font-size:13px;color:#7eb8f7;font-family:monospace;word-break:break-all}
+  .modal-btns{display:flex;gap:10px;justify-content:flex-end}
+  ::-webkit-scrollbar{width:6px}
+  ::-webkit-scrollbar-track{background:#0f1117}
+  ::-webkit-scrollbar-thumb{background:#2d3448;border-radius:3px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏢 RW Financial Analyst</h1>
+  <span>v2.1</span>
+</header>
+
+<div class="api-bar">
+  <label>OpenAI Key:</label>
+  <span class="api-status missing" id="apiStatus">Checking Vercel…</span>
+</div>
+
+<main>
+  <div class="left">
+    <div class="panel-header">📁 Upload Reports</div>
+    <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()"
+         ondragover="ev(event,'drag')" ondragleave="ev(event,'nodrag')" ondrop="handleDrop(event)">
+      <div class="icon">📄</div>
+      <p>Drop PDF / Excel files here<br>or click to browse</p>
+      <input type="file" id="fileInput" multiple accept=".pdf,.xlsx,.xls,.csv" onchange="handleFiles(this.files)"/>
+    </div>
+    <div class="file-list" id="fileList"></div>
+
+    <label class="manual-toggle">
+      <input type="checkbox" id="manualToggle" onchange="toggleManual()"/>
+      Enter manual data / notes
+    </label>
+    <div class="manual-area" id="manualArea">
+      <textarea id="manualText" placeholder="Paste additional data, notes, or context here..."></textarea>
+    </div>
+
+    <div class="panel-header" style="margin-top:10px">💬 Conversation</div>
+    <div class="chat-area" id="chatArea"></div>
+    <div class="input-row">
+      <textarea id="userInput" rows="1" placeholder="Ask a question or answer open items..."
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
+      <button class="btn" id="sendBtn" onclick="send()">Send</button>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="report-toolbar">
+      <span class="title" id="reportTitle">Report will appear here after first analysis</span>
+      <div class="view-toggle">
+        <button class="view-btn active" id="vPreview" onclick="setView('preview')">Preview</button>
+        <button class="view-btn" id="vEdit" onclick="setView('edit')">Edit</button>
+      </div>
+      <button class="btn btn-sm" id="copyBtn" onclick="copyReport()" style="display:none">📋 Copy</button>
+      <button class="btn btn-sm btn-success" id="finalizeBtn" onclick="promptFinalize()" style="display:none">✅ Finalize & Export</button>
+      <button class="btn btn-sm btn-danger" onclick="clearAll()">🗑 Reset</button>
+    </div>
+    <div class="report-content" id="reportContent">
+      <div class="empty-report" id="emptyReport">
+        <div class="big">📊</div>
+        <p>Upload reports and start the conversation<br>to generate your RiverWest analysis.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Export modal -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <h2>📄 Finalize & Export Report</h2>
+    <p>Your report is ready to export. It will be saved as a Word document (.docx) with the following filename:</p>
+    <div class="filename" id="exportFilename"></div>
+    <p style="font-size:12px;color:#64748b">Please confirm the report is final before downloading. You can still return to edit if needed.</p>
+    <div class="modal-btns">
+      <button class="btn btn-sm" onclick="closeModal()">← Go Back</button>
+      <button class="btn btn-sm btn-success" onclick="doExport()">⬇ Download Word File</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const state = {
+  files: [],
+  // In OpenAI Responses API, we can keep conversation history by re-sending prior turns.
+  // The docs show appending the model output back into history to preserve context. :contentReference[oaicite:6]{index=6}
+  history: [],
+  report: '',
+  view: 'preview',
+  exportMeta: { month:'', year:'', property:'' }
+};
+
+// ── Key status check (server-side env var) ───────────────────────────────
+async function checkServerKey() {
+  const el = document.getElementById('apiStatus');
+  try {
+    const r = await fetch('/api/openai?ping=1');
+    const j = await r.json();
+    if (j.ok) { el.textContent = '✓ Ready (stored in Vercel)'; el.className = 'api-status ok'; }
+    else { el.textContent = 'Missing key in Vercel'; el.className = 'api-status missing'; }
+  } catch {
+    el.textContent = 'API route not found'; el.className = 'api-status missing';
+  }
+}
+checkServerKey();
+
+// ── Detect report metadata from content ──────────────────────────────────
+function extractMeta(reportText) {
+  const lines = reportText.split('\n').slice(0,10).join(' ');
+  const months = {january:'01',february:'02',march:'03',april:'04',may:'05',june:'06',
+                  july:'07',august:'08',september:'09',october:'10',november:'11',december:'12'};
+  let month = '', year = '', property = '';
+  const ym = lines.match(/\b(20\d{2})\b/);
+  if (ym) year = ym[1];
+  const lo = lines.toLowerCase();
+  for (const [name, num] of Object.entries(months)) {
+    if (lo.includes(name)) { month = num; break; }
+  }
+  const h1 = reportText.match(/^#\s+(.+)$/m);
+  if (h1) {
+    property = h1[1].replace(/financial commentary|monthly report|–|-|\d{4}|january|february|march|april|may|june|july|august|september|october|november|december/gi,'').trim();
+    property = property.replace(/\s+/g,' ').trim();
+  }
+  return {month, year, property};
+}
+function buildFilename(month, year, property) {
+  const m = month || 'MM';
+  const y = year || 'YYYY';
+  const p = property || 'Property Name';
+  return `${m} ${y} - ${p} - Financial Commentary.docx`;
+}
+
+// ── Word export helpers (unchanged from your file) ───────────────────────
+function stripMd(text) { return text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/`(.+?)`/g, '$1'); }
+function escXml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;'); }
+// (Keeping your original docx functions; omitted here for brevity)
+</script>
+
+<script>
+// ── System prompt (unchanged from your file) ─────────────────────────────
+const SYSTEM = `...KEEP YOUR FULL SYSTEM PROMPT HERE (unchanged)...`;
+
+// ── File handling (mostly unchanged) ─────────────────────────────────────
+function ev(e,a){e.preventDefault();document.getElementById('dropZone').classList.toggle('drag',a==='drag');}
+function handleDrop(e){e.preventDefault();document.getElementById('dropZone').classList.remove('drag');handleFiles(e.dataTransfer.files);}
+function handleFiles(files){Array.from(files).forEach(f=>processFile(f));}
+function processFile(f){
+  const ext=f.name.split('.').pop().toLowerCase();
+  if(ext==='pdf'){
+    const r=new FileReader();
+    r.onload=e=>addFile(f.name,'pdf',e.target.result.split(',')[1]); // store raw base64
+    r.readAsDataURL(f);
+  } else if(['xlsx','xls'].includes(ext)){
+    const r=new FileReader();
+    r.onload=e=>{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      let t='';
+      wb.SheetNames.forEach(s=>{t+=`\n=== Sheet: ${s} ===\n`+XLSX.utils.sheet_to_csv(wb.Sheets[s]);});
+      addFile(f.name,'xlsx',t);
+    };
+    r.readAsArrayBuffer(f);
+  } else if(ext==='csv'){
+    const r=new FileReader();
+    r.onload=e=>addFile(f.name,'csv',e.target.result);
+    r.readAsText(f);
+  }
+}
+function addFile(name,type,content){if(state.files.find(f=>f.name===name))return;state.files.push({name,type,content});renderFiles();}
+function removeFile(name){state.files=state.files.filter(f=>f.name!==name);renderFiles();}
+function renderFiles(){
+  document.getElementById('fileList').innerHTML=state.files.map(f=>`
+    <div class="file-chip"><span class="ftype">${f.type.toUpperCase()}</span>
+    <span class="fname" title="${f.name}">${f.name}</span>
+    <span class="rem" onclick="removeFile('${f.name}')">✕</span></div>`).join('');
+}
+function toggleManual(){document.getElementById('manualArea').style.display=document.getElementById('manualToggle').checked?'block':'none';}
+
+// ── Chat UI helpers ──────────────────────────────────────────────────────
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function addMsg(role,text){
+  const el=document.getElementById('chatArea');
+  const d=document.createElement('div');d.className=`msg ${role}`;
+  const preview=text.length>400?text.slice(0,400)+'…':text;
+  d.innerHTML=`<div class="msg-label">${role==='user'?'You':'RW Analyst'}</div><div class="bubble">${escHtml(preview)}</div>`;
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+function showTyping(){const el=document.getElementById('chatArea');const d=document.createElement('div');d.id='typing';d.innerHTML=`<div class="typing"><span></span><span></span><span></span></div>`;el.appendChild(d);el.scrollTop=el.scrollHeight;}
+function hideTyping(){const t=document.getElementById('typing');if(t)t.remove();}
+
+// ── Core send() updated for OpenAI ───────────────────────────────────────
+// OpenAI file inputs: PDFs should be sent as type "input_file" with file_data "data:application/pdf;base64,...". :contentReference[oaicite:7]{index=7}
+async function send(){
+  const input=document.getElementById('userInput');
+  const txt=input.value.trim();
+  const manual=document.getElementById('manualText').value.trim();
+
+  // Build one "user message" with content parts
+  let userContent=[];
+
+  // Only attach files/notes on first message (same logic as your original)
+  if(state.files.length>0 && state.history.length===0){
+    state.files.forEach(f=>{
+      if(f.type==='pdf'){
+        userContent.push({
+          type:'input_file',
+          filename: f.name,
+          file_data: `data:application/pdf;base64,${f.content}`
+        });
+      } else {
+        userContent.push({ type:'input_text', text:`=== File: ${f.name} ===\n${f.content}` });
+      }
+    });
+  }
+
+  if(manual && state.history.length===0){
+    userContent.push({ type:'input_text', text:`=== Manual Notes / Additional Data ===\n${manual}` });
+  }
+
+  const msgText = txt || (state.history.length===0 ? 'Please analyze these financial reports and produce the RiverWest v2.1 report.' : '');
+  if(!msgText && userContent.length===0) return;
+  if(msgText) userContent.push({ type:'input_text', text: msgText });
+
+  input.value='';
+  document.getElementById('sendBtn').disabled=true;
+  addMsg('user', txt || (state.files.length>0?`[Uploaded ${state.files.length} file(s)] Analyze these reports.`:''));
+
+  // Append the user turn to history
+  state.history.push({ role:'user', content: userContent });
+
+  showTyping();
+
+  try{
+    const resp = await fetch('/api/openai', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        // Keep the system prompt server-side? Here we send it for simplicity.
+        // (Server will place it in "developer" role before your chat history.)
+        system: SYSTEM,
+        input: state.history
+      })
+    });
+
+    const data = await resp.json();
+    hideTyping();
+
+    if(!resp.ok || data.error){
+      const msg = data?.error?.message || data?.error || `HTTP ${resp.status}`;
+      addMsg('assistant', `Error: ${msg}`);
+      state.history.pop(); // undo last user message
+      document.getElementById('sendBtn').disabled=false;
+      return;
+    }
+
+    // Add the assistant message back into history so context is preserved across turns.
+    // OpenAI docs show appending the model output into history for conversation state. :contentReference[oaicite:8]{index=8}
+    state.history.push(data.assistant_message);
+
+    const fullText = data.text || '';
+
+    // Marker extraction (same concept as your original)
+    const cleaned = fullText.replace(/```[a-z]*\n?/gi,'');
+    const repMatch = cleaned.match(/---REPORT---\s*([\s\S]*?)\s*---END REPORT---/);
+    let chatText = cleaned.replace(/---REPORT---[\s\S]*?---END REPORT---/,'').trim();
+
+    if(repMatch){
+      state.report = repMatch[1].trim();
+      renderReport();
+      document.getElementById('reportTitle').textContent='Current Report';
+      document.getElementById('copyBtn').style.display='inline-block';
+      document.getElementById('finalizeBtn').style.display='inline-block';
+      const emp=document.getElementById('emptyReport');
+      if(emp) emp.style.display='none';
+    }
+
+    if(chatText) addMsg('assistant', chatText);
+    else if(repMatch) addMsg('assistant','Report updated — review the right panel.');
+
+  } catch(err){
+    hideTyping();
+    addMsg('assistant',`Network error: ${err.message}`);
+    state.history.pop();
+  }
+
+  document.getElementById('sendBtn').disabled=false;
+}
+
+// ── Report view + copy + reset (keep your original implementations) ──────
+// NOTE: keep the rest of your existing JS: mdToHtml, renderReport, export, etc.
+</script>
+
+<!-- IMPORTANT:
+1) Paste your original (unchanged) docx/export functions + mdToHtml/renderReport/copy/reset below
+2) Paste your original SYSTEM prompt string in the SYSTEM constant above (I left a placeholder)
+-->
+
+</body>
+</html>
